@@ -1023,6 +1023,34 @@ function updateNowPlaying(t) {
   }
   artEl.classList.add('playing');
   document.getElementById('add-video-btn').style.opacity = t.type === 'local' ? '1' : '0.3';
+
+  // ── Media Session API — shows WAVR in notification bar & lock screen ──
+  if ('mediaSession' in navigator) {
+    const artwork = t.art ? [
+      { src: t.art, sizes: '512x512', type: 'image/jpeg' },
+      { src: t.art, sizes: '256x256', type: 'image/jpeg' },
+    ] : [
+      { src: '/wavr/icon-192.png', sizes: '192x192', type: 'image/png' },
+    ];
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title:  t.title  || 'Unknown',
+      artist: t.artist || '—',
+      album:  'WAVR',
+      artwork,
+    });
+    navigator.mediaSession.setActionHandler('play',          () => { togglePlay(); });
+    navigator.mediaSession.setActionHandler('pause',         () => { togglePlay(); });
+    navigator.mediaSession.setActionHandler('previoustrack', () => { prevTrack(); });
+    navigator.mediaSession.setActionHandler('nexttrack',     () => { nextTrack(); });
+    navigator.mediaSession.setActionHandler('seekto', e => {
+      if (t.type === 'youtube' && ytPlayer) {
+        ytPlayer.seekTo(e.seekTime, true);
+      } else if (audioEl.duration) {
+        audioEl.currentTime = e.seekTime;
+      }
+    });
+    navigator.mediaSession.playbackState = 'playing';
+  }
 }
 
 function resetPlayer() {
@@ -1055,6 +1083,8 @@ function updatePlayBtn() {
   btn.textContent = state.playing ? '⏸' : '▶';
   const t = state.tracks[state.currentIndex];
   btn.className = (t && t.type === 'spotify') ? 'spotify-mode' : '';
+  if ('mediaSession' in navigator)
+    navigator.mediaSession.playbackState = state.playing ? 'playing' : 'paused';
 }
 
 function prevTrack() {
