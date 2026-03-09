@@ -133,8 +133,8 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
 .track-badge.synced{background:rgba(200,123,255,.12);color:var(--accent2);}
 .track-badge.video{background:rgba(255,170,68,.12);color:var(--warn);}
 .track-badge.youtube{background:rgba(255,0,0,.12);color:#ff4444;}
-#yt-player{position:absolute;inset:0;width:100%;height:100%;display:none;z-index:3;}
-#yt-player iframe{width:100%;height:100%;border:none;}
+#yt-player{position:absolute;inset:0;width:100%;height:100%;display:none;z-index:3;overflow:hidden;}
+#yt-player iframe{position:absolute;top:-60px;left:0;width:100%;height:calc(100% + 120px);border:none;pointer-events:none;}
 .yt-wrap{padding:0 14px 6px;}
 .yt-wrap input{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:7px 10px;font-size:11px;font-family:"Space Mono",monospace;outline:none;}
 .yt-wrap input:focus{border-color:#ff4444;}
@@ -1400,7 +1400,7 @@ function playYouTubeTrack(videoId) {
   container.innerHTML = '<div id="yt-iframe-target"></div>';
   ytPlayer = new YT.Player('yt-iframe-target', {
     videoId,
-    playerVars: { autoplay: 1, controls: 1, rel: 0, modestbranding: 1, origin: location.origin },
+    playerVars: { autoplay: 1, controls: 0, rel: 0, modestbranding: 1, showinfo: 0, iv_load_policy: 3, disablekb: 0, fs: 0, origin: location.origin },
     events: {
       onStateChange: (e) => {
         if (e.data === YT.PlayerState.PLAYING) {
