@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>WAVR — Your Player</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
-<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+
 <style>
 :root {
   --bg:#0a0a0f; --surface:#111118; --surface2:#18181f; --surface3:#1e1e28;
@@ -274,15 +274,11 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
     <div id="sidebar-resizer"></div>
     <div class="sidebar-header">
       <div class="logo">WAV<span>R</span></div>
-      <div style="display:flex;align-items:center;gap:6px;" class="sidebar-hide">
-        <div class="user-badge" onclick="toggleAccountMenu()" id="user-badge">
-          <div class="user-avatar" id="user-avatar">?</div>
-          <div class="user-email" id="user-email-label">—</div>
-          <div class="sync-dot" id="sync-dot" style="display:none;"></div>
-        </div>
-        <button onclick="collapseSidebar()" title="Collapse sidebar" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:4px;border-radius:6px;transition:all .15s;" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--muted)'">◀</button>
+      <div class="user-badge sidebar-hide" onclick="toggleAccountMenu()" id="user-badge">
+        <div class="user-avatar" id="user-avatar">?</div>
+        <div class="user-email" id="user-email-label">—</div>
+        <div class="sync-dot" id="sync-dot" style="display:none;"></div>
       </div>
-      <button id="sidebar-expand-btn" onclick="collapseSidebar()" title="Expand sidebar" style="display:none;background:none;border:none;color:var(--accent);cursor:pointer;font-size:14px;padding:4px;">▶</button>
     </div>
 
     <!-- Account dropdown -->
@@ -433,7 +429,7 @@ function saveConfig(cfg) { localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); }
 function initSupabase(url, key) {
   if (!url || !key) return false;
   try {
-    sb = supabase.createClient(url, key);
+    sb = window.supabase.createClient(url, key);
     saveConfig({ url, key });
     return true;
   } catch(e) { console.error('Supabase init failed:', e); return false; }
@@ -763,20 +759,6 @@ function renderPlaylist() {
       t.videoStoragePath ? '<span class="track-badge video">🎬 VIDEO</span>' : '',
     ].join('');
 
-    // Build folder assign dropdown options
-    const folderOpts = folders.length
-      ? '<div class="folder-assign-menu" id="fam_' + i + '" style="display:none;position:absolute;right:0;top:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:4px;z-index:50;min-width:130px;">' +
-        folders.map(f =>
-          '<div onclick="event.stopPropagation();toggleTrackInFolder('' + t.id + '','' + f.id + '');document.getElementById('fam_' + i + '').style.display='none'" ' +
-          'style="padding:5px 8px;font-size:11px;cursor:pointer;border-radius:5px;display:flex;align-items:center;gap:6px;transition:background .1s" ' +
-          'onmouseover="this.style.background='var(--surface3)'" onmouseout="this.style.background=''">' +
-          '<span style="color:' + f.color + '">📁</span>' + esc(f.name) +
-          (f.trackIds.includes(t.id) ? ' <span style="color:var(--accent);margin-left:auto">✓</span>' : '') +
-          '</div>'
-        ).join('') +
-        '</div>'
-      : '';
-
     div.style.position = 'relative';
     div.innerHTML =
       '<div class="track-thumb">' +
@@ -787,11 +769,52 @@ function renderPlaylist() {
         '<div class="track-artist">' + esc(t.artist) + '</div>' +
         '<div class="track-badges">' + badges + '</div>' +
       '</div>' +
-      '<div class="track-actions" style="position:relative">' +
-        (folders.length ? '<button class="track-action-btn" onclick="event.stopPropagation();toggleFolderMenu(' + i + ')" title="Add to folder">📁' + folderOpts + '</button>' : '') +
-        (t.type === 'local' ? '<button class="track-action-btn' + (t.videoStoragePath ? ' has-video' : '') + '" onclick="event.stopPropagation();openVideoModalForTrack(' + i + ')" title="' + (t.videoStoragePath ? 'Change' : 'Add') + ' video">🎬</button>' : '') +
-        '<button class="track-action-btn" onclick="event.stopPropagation();removeTrack(' + i + ')" title="Remove">✕</button>' +
-      '</div>';
+      '<div class="track-actions" style="position:relative"></div>';
+
+    // Build track actions via DOM to avoid quote escaping
+    const actions = div.querySelector('.track-actions');
+    if (folders.length) {
+      const folderBtn = document.createElement('button');
+      folderBtn.className = 'track-action-btn';
+      folderBtn.title = 'Add to folder';
+      folderBtn.textContent = '📁';
+
+      const menu = document.createElement('div');
+      menu.style.cssText = 'display:none;position:absolute;right:0;top:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:4px;z-index:50;min-width:130px;';
+      folders.forEach(f => {
+        const item = document.createElement('div');
+        item.style.cssText = 'padding:5px 8px;font-size:11px;cursor:pointer;border-radius:5px;display:flex;align-items:center;gap:6px;';
+        item.addEventListener('mouseover', () => item.style.background = 'var(--surface3)');
+        item.addEventListener('mouseout',  () => item.style.background = '');
+        const fIcon = document.createElement('span'); fIcon.textContent = '📁'; fIcon.style.color = f.color;
+        const fName = document.createElement('span'); fName.textContent = f.name;
+        item.append(fIcon, fName);
+        if (f.trackIds.includes(t.id)) {
+          const check = document.createElement('span'); check.textContent = '✓';
+          check.style.cssText = 'color:var(--accent);margin-left:auto';
+          item.appendChild(check);
+        }
+        item.addEventListener('click', e => { e.stopPropagation(); toggleTrackInFolder(t.id, f.id); menu.style.display = 'none'; });
+        menu.appendChild(item);
+      });
+      folderBtn.addEventListener('click', e => { e.stopPropagation(); const open = menu.style.display !== 'none'; document.querySelectorAll('.folder-track-menu').forEach(m => m.style.display='none'); menu.style.display = open ? 'none' : 'block'; });
+      menu.className = 'folder-track-menu';
+      folderBtn.appendChild(menu);
+      actions.appendChild(folderBtn);
+    }
+    if (t.type === 'local') {
+      const vBtn = document.createElement('button');
+      vBtn.className = 'track-action-btn' + (t.videoStoragePath ? ' has-video' : '');
+      vBtn.title = (t.videoStoragePath ? 'Change' : 'Add') + ' video';
+      vBtn.textContent = '🎬';
+      vBtn.addEventListener('click', e => { e.stopPropagation(); openVideoModalForTrack(i); });
+      actions.appendChild(vBtn);
+    }
+    const delBtn = document.createElement('button');
+    delBtn.className = 'track-action-btn'; delBtn.title = 'Remove'; delBtn.textContent = '✕';
+    delBtn.addEventListener('click', e => { e.stopPropagation(); removeTrack(i); });
+    actions.appendChild(delBtn);
+
     div.addEventListener('click', () => playTrack(i));
     pl.appendChild(div);
   });
@@ -1513,19 +1536,10 @@ function initSidebarResize() {
   if (saved) sidebar.style.width = saved;
 }
 
-function collapseSidebar() {
-  const sidebar = document.getElementById('sidebar');
-  const expandBtn = document.getElementById('sidebar-expand-btn');
-  const collapsed = sidebar.classList.toggle('collapsed');
-  expandBtn.style.display = collapsed ? 'block' : 'none';
-  localStorage.setItem('wavr_sidebar_collapsed', collapsed ? '1' : '0');
-}
 
 function restoreSidebarState() {
-  if (localStorage.getItem('wavr_sidebar_collapsed') === '1') {
-    document.getElementById('sidebar').classList.add('collapsed');
-    document.getElementById('sidebar-expand-btn').style.display = 'block';
-  }
+  const saved = localStorage.getItem('wavr_sidebar_w');
+  if (saved) document.getElementById('sidebar').style.width = saved;
 }
 
 // ═══════════════════════════════════════════════════
@@ -1578,7 +1592,7 @@ function renameFolder(folderId) {
 }
 
 function deleteFolder(folderId) {
-  if (!confirm('Delete folder? Tracks inside won't be deleted.')) return;
+  if (!confirm('Delete folder? Tracks inside will not be deleted.')) return;
   folders = folders.filter(f => f.id !== folderId);
   if (activeFolderId === folderId) activeFolderId = null;
   saveFolders(); renderFolders(); renderPlaylist();
@@ -1615,23 +1629,36 @@ function getVisibleTracks() {
   return state.tracks.filter(t => folder.trackIds.includes(t.id));
 }
 
+function makeFolderBtn(text, title, color, onClick) {
+  const btn = document.createElement('button');
+  btn.className = 'folder-act-btn';
+  btn.textContent = text;
+  btn.title = title;
+  if (color) btn.style.color = color;
+  btn.addEventListener('click', e => { e.stopPropagation(); onClick(); });
+  return btn;
+}
+
 function renderFolders() {
   const library = document.getElementById('library');
   if (!library) return;
-  // Remove old folder rows
   [...library.querySelectorAll('.folder-row, .folder-tracks')].forEach(el => el.remove());
+  const pl = document.getElementById('playlist');
 
-  // "All Tracks" row
+  // All Tracks row
   const allRow = document.createElement('div');
-  allRow.className = 'folder-row' + (!activeFolderId ? ' active' : '');
+  allRow.className = 'folder-row';
   allRow.style.borderLeft = '3px solid ' + (!activeFolderId ? 'var(--accent)' : 'transparent');
   allRow.style.transition = 'border-color .15s';
-  allRow.innerHTML =
-    '<span class="folder-icon">🎵</span>' +
-    '<span class="folder-label" style="color:' + (!activeFolderId ? 'var(--text)' : '') + '">All Tracks</span>' +
-    '<span class="folder-count">' + state.tracks.length + '</span>';
+  const allIcon = document.createElement('span'); allIcon.className = 'folder-icon'; allIcon.textContent = '🎵';
+  const allLabel = document.createElement('span'); allLabel.className = 'folder-label';
+  allLabel.textContent = 'All Tracks';
+  allLabel.style.color = !activeFolderId ? 'var(--text)' : '';
+  const allCount = document.createElement('span'); allCount.className = 'folder-count';
+  allCount.textContent = state.tracks.length;
+  allRow.append(allIcon, allLabel, allCount);
   allRow.addEventListener('click', () => setActiveFolder(null));
-  library.insertBefore(allRow, document.getElementById('playlist'));
+  library.insertBefore(allRow, pl);
 
   // Folder rows
   folders.forEach(folder => {
@@ -1640,26 +1667,62 @@ function renderFolders() {
     row.className = 'folder-row';
     row.style.borderLeft = '3px solid ' + (isActive ? folder.color : 'transparent');
     row.style.transition = 'border-color .15s';
-    row.innerHTML =
-      '<span class="folder-caret' + (folder.open ? ' open' : '') + '">▶</span>' +
-      '<span class="folder-icon" style="color:' + folder.color + '">📁</span>' +
-      '<span class="folder-label" style="color:' + (isActive ? 'var(--text)' : '') + '">' + esc(folder.name) + '</span>' +
-      '<span class="folder-count">' + folder.trackIds.length + '</span>' +
-      '<div class="folder-actions">' +
-        '<button class="folder-act-btn" onclick="event.stopPropagation();setActiveFolder('' + folder.id + '')" title="Filter">◎</button>' +
-        '<button class="folder-act-btn" onclick="event.stopPropagation();renameFolder('' + folder.id + '')" title="Rename">✎</button>' +
-        '<button class="folder-act-btn" onclick="event.stopPropagation();deleteFolder('' + folder.id + '')" title="Delete" style="color:var(--danger)">✕</button>' +
-      '</div>';
-    row.querySelector('.folder-caret').addEventListener('click', e => { e.stopPropagation(); toggleFolderOpen(folder.id); });
-    row.querySelector('.folder-label').addEventListener('click', () => setActiveFolder(folder.id));
-    library.insertBefore(row, document.getElementById('playlist'));
+
+    const caret = document.createElement('span');
+    caret.className = 'folder-caret' + (folder.open ? ' open' : '');
+    caret.textContent = '▶';
+    caret.addEventListener('click', e => { e.stopPropagation(); toggleFolderOpen(folder.id); });
+
+    const icon = document.createElement('span');
+    icon.className = 'folder-icon'; icon.textContent = '📁'; icon.style.color = folder.color;
+
+    const label = document.createElement('span');
+    label.className = 'folder-label'; label.textContent = folder.name;
+    label.style.color = isActive ? 'var(--text)' : '';
+    label.addEventListener('click', () => setActiveFolder(folder.id));
+
+    const count = document.createElement('span');
+    count.className = 'folder-count'; count.textContent = folder.trackIds.length;
+
+    const actions = document.createElement('div');
+    actions.className = 'folder-actions';
+    actions.append(
+      makeFolderBtn('◎', 'Filter', null, () => setActiveFolder(folder.id)),
+      makeFolderBtn('✎', 'Rename', null, () => renameFolder(folder.id)),
+      makeFolderBtn('✕', 'Delete', 'var(--danger)', () => deleteFolder(folder.id))
+    );
+
+    row.append(caret, icon, label, count, actions);
+    library.insertBefore(row, pl);
   });
 }
 
 // ═══════════════════════════════════════════════════
 // BOOT — runs after DOM is fully ready
 // ═══════════════════════════════════════════════════
+async function bootApp() {
+  // Dynamically load Supabase so Edge tracking prevention doesn't block it
+  if (!window.supabase) {
+    await new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js';
+      s.crossOrigin = 'anonymous';
+      s.onload = resolve;
+      s.onerror = () => {
+        // fallback to unpkg
+        const s2 = document.createElement('script');
+        s2.src = 'https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js';
+        s2.onload = resolve; s2.onerror = reject;
+        document.head.appendChild(s2);
+      };
+      document.head.appendChild(s);
+    });
+  }
+  window._supabaseCreateClient = window.supabase.createClient;
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
+  await bootApp();
   // Grab DOM refs
   audioEl  = document.getElementById('audio-el');
   initSidebarResize();
@@ -1730,6 +1793,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (data.session?.user) await onLogin(data.session.user);
   }
 });
+
+// Expose all functions globally for inline event handlers
+const _globals = {
+  switchTab, doLogin, doLogout, toggleAccountMenu, startSpotifyOAuth,
+  importYouTubePlaylist, handleFiles, handleDrop, togglePlay, prevTrack, nextTrack,
+  toggleShuffle, toggleRepeat, toggleMute, seekTrack, moveThumb, removeTrack,
+  openVideoModalForTrack, closeVideoModal, confirmVideoAttach, searchSpotify,
+  createFolder, setActiveFolder, renameFolder, deleteFolder, toggleFolderOpen,
+  toggleTrackInFolder, toggleFolderMenu, toggleVideo, playTrack,
+};
+Object.assign(window, _globals);
 </script>
 </body>
 </html>
