@@ -472,7 +472,7 @@ function initSupabase(url, key) {
 const state = {
   tracks: [], currentIndex: -1, playing: false,
   shuffle: false, repeat: false, volume: 0.8, muted: false,
-  spotifyToken: null, videoShowing: false, ytProgressInterval: null,
+  spotifyToken: null, videoShowing: false, ytProgressInterval: null, ytVideoHidden: false,
   pendingVideoFile: null, pendingVideoTrackId: null,
   audioCtx: null, analyser: null, sourceNode: null,
   volSaveTimer: null,
@@ -969,16 +969,39 @@ function showVideoPlayer(show) {
 
 function toggleVideo() {
   const t = state.tracks[state.currentIndex];
-  if (state.videoShowing) {
-    videoEl.style.display = 'none';
-    document.getElementById('now-playing-center').style.display = 'flex';
-    canvasEl.style.opacity = '1'; state.videoShowing = false;
-    document.getElementById('video-toggle-btn').textContent = '🎬 Show Video';
-  } else if (t && t.videoUrl) {
-    videoEl.style.display = 'block';
-    document.getElementById('now-playing-center').style.display = 'none';
-    canvasEl.style.opacity = '0.2'; state.videoShowing = true;
-    document.getElementById('video-toggle-btn').textContent = '🎵 Hide Video';
+  const isYT = t && t.type === 'youtube';
+  const btn = document.getElementById('video-toggle-btn');
+
+  if (isYT) {
+    const container = document.getElementById('yt-player');
+    if (!state.ytVideoHidden) {
+      // Hide it
+      container.style.display = 'none';
+      document.getElementById('now-playing-center').style.display = 'flex';
+      document.getElementById('canvas-viz').style.opacity = '1';
+      state.ytVideoHidden = true;
+      btn.textContent = '🎬 Show Video';
+    } else {
+      // Show it
+      container.style.display = 'block';
+      document.getElementById('now-playing-center').style.display = 'none';
+      document.getElementById('canvas-viz').style.opacity = '0.15';
+      state.ytVideoHidden = false;
+      btn.textContent = '🎵 Hide Video';
+    }
+  } else {
+    // Local video
+    if (state.videoShowing) {
+      videoEl.style.display = 'none';
+      document.getElementById('now-playing-center').style.display = 'flex';
+      canvasEl.style.opacity = '1'; state.videoShowing = false;
+      btn.textContent = '🎬 Show Video';
+    } else if (t && t.videoUrl) {
+      videoEl.style.display = 'block';
+      document.getElementById('now-playing-center').style.display = 'none';
+      canvasEl.style.opacity = '0.2'; state.videoShowing = true;
+      btn.textContent = '🎵 Hide Video';
+    }
   }
 }
 
@@ -1350,10 +1373,16 @@ function playYouTubeTrack(videoId) {
   if (!videoId) return;
   ensureYouTubeAPI();
   const container = document.getElementById('yt-player');
-  container.style.display = 'block';
-  document.getElementById('now-playing-center').style.display = 'none';
-  document.getElementById('canvas-viz').style.opacity = '0.15';
-  document.getElementById('video-toggle-btn').classList.remove('visible');
+  // Respect hidden state — if user hid video, keep it hidden
+  if (!state.ytVideoHidden) {
+    container.style.display = 'block';
+    document.getElementById('now-playing-center').style.display = 'none';
+    document.getElementById('canvas-viz').style.opacity = '0.15';
+  }
+  // Show the toggle button for YouTube too
+  const btn = document.getElementById('video-toggle-btn');
+  btn.textContent = state.ytVideoHidden ? '🎬 Show Video' : '🎵 Hide Video';
+  btn.classList.add('visible');
 
   if (!ytReady) { ytPendingId = videoId; return; }
 
@@ -1397,6 +1426,8 @@ function hideYouTubePlayer() {
   document.getElementById('yt-player').style.display = 'none';
   document.getElementById('now-playing-center').style.display = 'flex';
   document.getElementById('canvas-viz').style.opacity = '1';
+  document.getElementById('video-toggle-btn').classList.remove('visible');
+  state.ytVideoHidden = false;
 }
 
 function toggleYouTubePlayback() {
