@@ -1334,7 +1334,7 @@ function playYouTubeTrack(videoId) {
   container.innerHTML = '<div id="yt-iframe-target"></div>';
   ytPlayer = new YT.Player('yt-iframe-target', {
     videoId,
-    playerVars: { autoplay: 1, controls: 1, rel: 0, modestbranding: 1 },
+    playerVars: { autoplay: 1, controls: 1, rel: 0, modestbranding: 1, origin: location.origin },
     events: {
       onStateChange: (e) => {
         if (e.data === YT.PlayerState.PLAYING) {
@@ -1549,13 +1549,14 @@ function restoreSidebarState() {
 let folders = [];
 let activeFolderId = null; // null = show all tracks
 
-function saveFolders() {
+async function saveFolders() {
   if (!sb || !currentUser) return;
-  sb.from('wavr_settings').upsert({
+  const { error } = await sb.from('wavr_settings').upsert({
     user_id: currentUser.id,
     folders_json: JSON.stringify(folders),
     updated_at: new Date().toISOString(),
-  }).catch(e => console.warn('saveFolders error:', e));
+  });
+  if (error) console.warn('saveFolders error:', error);
 }
 
 async function loadFolders() {
