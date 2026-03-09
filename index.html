@@ -1390,6 +1390,40 @@ async function toggleSpotifyPlayback() {
 let ytPlayer = null;
 let ytReady = false;
 let ytPendingId = null;
+let keepAliveNode = null;
+
+// Plays a silent audio loop via Web Audio to prevent Chrome from
+// suspending the tab when YouTube is playing in background
+function startKeepAlive() {
+  if (keepAliveNode) return; // already running
+  try {
+    if (!state.audioCtx) {
+      state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (state.audioCtx.state === 'suspended') state.audioCtx.resume();
+
+    // Create a tiny silent buffer and loop it
+    const buf = state.audioCtx.createBuffer(1, state.audioCtx.sampleRate, state.audioCtx.sampleRate);
+    const src = state.audioCtx.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+
+    // Connect through a gain node at near-zero volume (not zero — zero gets optimized away)
+    const gain = state.audioCtx.createGain();
+    gain.gain.value = 0.001;
+    src.connect(gain);
+    gain.connect(state.audioCtx.destination);
+    src.start(0);
+    keepAliveNode = { src, gain };
+    console.log('Keep-alive audio started');
+  } catch(e) { console.warn('Keep-alive failed:', e); }
+}
+
+function stopKeepAlive() {
+  if (!keepAliveNode) return;
+  try { keepAliveNode.src.stop(); } catch(e) {}
+  keepAliveNode = null;
+}
 
 // Load YouTube IFrame API once
 function ensureYouTubeAPI() {
@@ -1435,6 +1469,7 @@ function playYouTubeTrack(videoId) {
       onStateChange: (e) => {
         if (e.data === YT.PlayerState.PLAYING) {
           state.playing = true; updatePlayBtn();
+          startKeepAlive(); // keep tab active in background
           // Update progress bar from YouTube player
           clearInterval(state.ytProgressInterval);
           state.ytProgressInterval = setInterval(() => {
@@ -1449,8 +1484,8 @@ function playYouTubeTrack(videoId) {
             }
           }, 500);
         }
-        if (e.data === YT.PlayerState.PAUSED)  { state.playing = false; updatePlayBtn(); }
-        if (e.data === YT.PlayerState.ENDED)   { clearInterval(state.ytProgressInterval); nextTrack(); }
+        if (e.data === YT.PlayerState.PAUSED)  { state.playing = false; updatePlayBtn(); stopKeepAlive(); }
+        if (e.data === YT.PlayerState.ENDED)   { clearInterval(state.ytProgressInterval); stopKeepAlive(); nextTrack(); }
       }
     }
   });
@@ -1458,6 +1493,7 @@ function playYouTubeTrack(videoId) {
 
 function hideYouTubePlayer() {
   clearInterval(state.ytProgressInterval);
+  stopKeepAlive();
   if (ytPlayer) { try { ytPlayer.stopVideo(); } catch(e) {} }
   document.getElementById('yt-player').style.display = 'none';
   document.getElementById('now-playing-center').style.display = 'flex';
