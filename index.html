@@ -1311,23 +1311,53 @@ async function importYouTubePlaylist() {
     return;
   }
 
-  // Playlist — use YouTube RSS feed (no API key needed, returns up to 15 videos)
-  // For more videos we page through oEmbed
   const feedUrl = 'https://www.youtube.com/feeds/videos.xml?playlist_id=' + playlistId;
+
+  // Try multiple CORS proxies in sequence until one works
+  const proxies = [
+    url => 'https://corsproxy.io/?' + encodeURIComponent(url),
+    url => 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url),
+    url => 'https://api.allorigins.win/get?url=' + encodeURIComponent(url),
+  ];
+
+  let xmlText = null;
+  for (const proxy of proxies) {
+    try {
+      const res = await fetch(proxy(feedUrl), { signal: AbortSignal.timeout(6000) });
+      if (!res.ok) continue;
+      const text = await res.text();
+      // allorigins wraps in JSON, others return raw
+      if (text.trim().startsWith('{')) {
+        const json = JSON.parse(text);
+        xmlText = json.contents || json.data || null;
+      } else {
+        xmlText = text;
+      }
+      if (xmlText && xmlText.includes('<entry>')) break;
+      xmlText = null;
+    } catch(e) { console.warn('Proxy failed:', proxy(feedUrl), e.message); }
+  }
+
+  if (!xmlText) {
+    toast('Could not fetch playlist. Try pasting individual video URLs instead.', 'warn');
+    setSyncStatus('', '');
+    return;
+  }
+
   try {
-    const res = await fetch('https://api.allorigins.win/get?url=' + encodeURIComponent(feedUrl));
-    const json = await res.json();
     const parser = new DOMParser();
-    const xml = parser.parseFromString(json.contents, 'text/xml');
+    const xml = parser.parseFromString(xmlText, 'text/xml');
     const entries = [...xml.querySelectorAll('entry')];
-    if (!entries.length) { toast('Could not fetch playlist — try a single video URL', 'warn'); setSyncStatus('', ''); return; }
+    if (!entries.length) { toast('Playlist appears empty or is private', 'warn'); setSyncStatus('', ''); return; }
 
     let added = 0;
     for (const entry of entries) {
-      const videoId = entry.querySelector('videoId')?.textContent || entry.querySelector('id')?.textContent?.split(':').pop();
-      const title   = entry.querySelector('title')?.textContent || 'Unknown';
-      const thumb   = entry.querySelector('thumbnail')?.getAttribute('url') || 'https://i.ytimg.com/vi/' + videoId + '/mqdefault.jpg';
-      const author  = entry.querySelector('author name')?.textContent || 'YouTube';
+      const videoId = entry.querySelector('videoId')?.textContent
+        || entry.querySelector('id')?.textContent?.split(':').pop();
+      const title  = entry.querySelector('title')?.textContent || 'Unknown';
+      const thumb  = entry.querySelector('thumbnail')?.getAttribute('url')
+        || 'https://i.ytimg.com/vi/' + videoId + '/mqdefault.jpg';
+      const author = entry.querySelector('author name')?.textContent || 'YouTube';
       if (!videoId) continue;
       if (state.tracks.find(t => t.youtubeId === videoId)) continue;
       state.tracks.push({
@@ -1343,10 +1373,10 @@ async function importYouTubePlaylist() {
     scheduleSave();
     setSyncStatus('saved', '✓ Saved');
     document.getElementById('yt-input').value = '';
-    toast(added + ' tracks imported from YouTube ✓', 'success');
+    toast(added + ' track(s) imported from YouTube ✓', 'success');
   } catch(e) {
-    console.error('YouTube import error:', e);
-    toast('Import failed: ' + e.message, 'err');
+    console.error('YouTube parse error:', e);
+    toast('Failed to parse playlist: ' + e.message, 'err');
     setSyncStatus('', '⚠ Error');
   }
 }
