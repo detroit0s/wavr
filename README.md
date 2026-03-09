@@ -1,4 +1,4 @@
-# WAVR 🎵
+# WAVR 
 
 A personal audio player web app with cross-device sync, YouTube integration, Spotify support, and PWA installation for Android.
 
