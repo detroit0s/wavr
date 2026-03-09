@@ -1069,10 +1069,16 @@ function toggleRepeat()  { state.repeat  = !state.repeat;  document.getElementBy
 
 function seekTrack(e) {
   const cur = state.tracks[state.currentIndex];
-  if (cur && cur.type === 'youtube') return; // YouTube player handles its own seeking
-  if (!audioEl.duration) return;
   const r = e.currentTarget.getBoundingClientRect();
   const p = (e.clientX - r.left) / r.width;
+
+  if (cur && cur.type === 'youtube') {
+    if (!ytPlayer || !ytPlayer.getDuration) return;
+    const dur = ytPlayer.getDuration();
+    if (dur > 0) ytPlayer.seekTo(p * dur, true);
+    return;
+  }
+  if (!audioEl.duration) return;
   audioEl.currentTime = p * audioEl.duration;
   if (state.videoShowing && videoEl.duration) videoEl.currentTime = audioEl.currentTime;
 }
