@@ -47,7 +47,15 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
 #app{position:relative;z-index:1;display:flex;height:100vh;}
 
 /* SIDEBAR */
-#sidebar{width:270px;min-width:270px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
+#sidebar{width:270px;min-width:160px;max-width:520px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;position:relative;flex-shrink:0;}
+#sidebar-resizer{position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;z-index:20;background:transparent;transition:background .15s;}
+#sidebar-resizer:hover,#sidebar-resizer.dragging{background:var(--accent2);}
+#sidebar.collapsed{width:52px!important;min-width:52px;}
+#sidebar.collapsed .sidebar-hide{display:none!important;}
+#sidebar.collapsed .logo{font-size:13px;letter-spacing:2px;}
+#sidebar.collapsed .sidebar-header{padding:14px 10px;justify-content:center;}
+#sidebar.collapsed #user-badge{padding:4px;border-radius:50%;}
+#sidebar.collapsed .user-email,.sidebar.collapsed .sync-dot{display:none;}
 .sidebar-header{padding:22px 20px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
 .logo{font-size:20px;font-weight:800;letter-spacing:4px;color:var(--accent);}
 .logo span{color:var(--accent2);}
@@ -80,8 +88,25 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
 .upload-zone:hover,.upload-zone.drag{border-color:var(--accent);color:var(--accent);background:rgba(124,252,138,.04);}
 .upload-zone .up-icon{font-size:18px;margin-bottom:3px;}
 
+/* Folders + Playlist */
+#library{flex:1;overflow-y:auto;padding:0 0 6px;}
+#library::-webkit-scrollbar{width:3px;}
+#library::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+.folder-row{display:flex;align-items:center;gap:6px;padding:6px 14px 4px;cursor:pointer;user-select:none;}
+.folder-row:hover .folder-label{color:var(--text);}
+.folder-caret{font-size:9px;color:var(--muted);transition:transform .15s;flex-shrink:0;}
+.folder-caret.open{transform:rotate(90deg);}
+.folder-icon{font-size:13px;flex-shrink:0;}
+.folder-label{font-size:11px;font-weight:700;color:var(--muted);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.5px;}
+.folder-count{font-size:9px;color:var(--muted);font-family:'Space Mono',monospace;flex-shrink:0;}
+.folder-actions{display:flex;gap:2px;opacity:0;transition:opacity .15s;}
+.folder-row:hover .folder-actions{opacity:1;}
+.folder-act-btn{background:none;border:none;color:var(--muted);cursor:pointer;font-size:10px;padding:2px 4px;border-radius:4px;transition:all .15s;}
+.folder-act-btn:hover{color:var(--accent2);background:var(--surface3);}
+.folder-tracks{padding-left:0;}
+.folder-tracks.collapsed{display:none;}
 /* Playlist */
-#playlist{flex:1;overflow-y:auto;padding:0 0 6px;}
+#playlist{padding:0 0 6px;}
 #playlist::-webkit-scrollbar{width:3px;}
 #playlist::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
 .track-item{display:flex;align-items:center;gap:9px;padding:8px 14px;cursor:pointer;border-left:3px solid transparent;transition:background .15s,border-color .15s;position:relative;}
@@ -246,13 +271,18 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
 <!-- MAIN APP -->
 <div id="app" style="display:none;">
   <div id="sidebar">
+    <div id="sidebar-resizer"></div>
     <div class="sidebar-header">
       <div class="logo">WAV<span>R</span></div>
-      <div class="user-badge" onclick="toggleAccountMenu()" id="user-badge">
-        <div class="user-avatar" id="user-avatar">?</div>
-        <div class="user-email" id="user-email-label">—</div>
-        <div class="sync-dot" id="sync-dot" style="display:none;"></div>
+      <div style="display:flex;align-items:center;gap:6px;" class="sidebar-hide">
+        <div class="user-badge" onclick="toggleAccountMenu()" id="user-badge">
+          <div class="user-avatar" id="user-avatar">?</div>
+          <div class="user-email" id="user-email-label">—</div>
+          <div class="sync-dot" id="sync-dot" style="display:none;"></div>
+        </div>
+        <button onclick="collapseSidebar()" title="Collapse sidebar" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:4px;border-radius:6px;transition:all .15s;" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--muted)'">◀</button>
       </div>
+      <button id="sidebar-expand-btn" onclick="collapseSidebar()" title="Expand sidebar" style="display:none;background:none;border:none;color:var(--accent);cursor:pointer;font-size:14px;padding:4px;">▶</button>
     </div>
 
     <!-- Account dropdown -->
@@ -265,8 +295,8 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
       <div class="acct-menu-item danger" onclick="doLogout()">⏻ Sign Out</div>
     </div>
 
-    <div class="section-label">Spotify</div>
-    <button id="spotify-connect" onclick="startSpotifyOAuth()">
+    <div class="section-label sidebar-hide">Spotify</div>
+    <button id="spotify-connect" onclick="startSpotifyOAuth()" class="sidebar-hide">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
       Connect Spotify
     </button>
@@ -276,14 +306,14 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
       <button onclick="searchSpotify()">🔍 Search</button>
     </div>
 
-    <div class="section-label">YouTube</div>
-    <div class="yt-wrap">
+    <div class="section-label sidebar-hide">YouTube</div>
+    <div class="yt-wrap sidebar-hide">
       <input type="text" id="yt-input" placeholder="Paste YouTube playlist URL..." onkeydown="if(event.key==='Enter')importYouTubePlaylist()" />
       <button onclick="importYouTubePlaylist()">▶ Import Playlist</button>
     </div>
 
-    <div class="section-label">Local Library</div>
-    <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()"
+    <div class="section-label sidebar-hide">Local Library</div>
+    <div class="upload-zone sidebar-hide" id="upload-zone" onclick="document.getElementById('file-input').click()"
       ondragover="event.preventDefault();this.classList.add('drag')"
       ondragleave="this.classList.remove('drag')"
       ondrop="handleDrop(event)">
@@ -291,11 +321,16 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
     </div>
     <input type="file" id="file-input" accept="audio/*" multiple hidden onchange="handleFiles(this.files)">
 
-    <div id="playlist">
+    <div style="padding:6px 14px 4px;display:flex;align-items:center;justify-content:space-between;" class="sidebar-hide">
+      <span style="font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--muted);font-family:'Space Mono',monospace;">Library</span>
+      <button onclick="createFolder()" title="New folder" style="background:none;border:1px solid var(--border);color:var(--muted);cursor:pointer;font-size:10px;padding:2px 8px;border-radius:6px;transition:all .15s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">+ Folder</button>
+    </div>
+    <div id="library" class="sidebar-hide">
       <div class="empty-state" id="empty-state">
         <div class="empty-icon">🎧</div>
         Add tracks to get started.<br>Your library syncs across devices.
       </div>
+      <div id="playlist"></div>
     </div>
   </div>
 
@@ -482,6 +517,7 @@ async function onLogin(user) {
   document.getElementById('acct-email-label').textContent = user.email;
   document.getElementById('sync-dot').style.display = '';
   await loadUserData();
+  await loadFolders();
   await restoreSpotifySession();
 }
 
@@ -565,7 +601,7 @@ async function loadUserData() {
 
 async function saveSettings() {
   if (!sb || !currentUser) return;
-  await sb.from('wavr_settings').upsert({ user_id: currentUser.id, spotify_token: null, volume: state.volume, updated_at: new Date().toISOString() });
+  await sb.from('wavr_settings').upsert({ user_id: currentUser.id, spotify_token: null, volume: state.volume, folders_json: JSON.stringify(folders), updated_at: new Date().toISOString() });
 }
 
 async function savePlaylist() {
@@ -712,9 +748,11 @@ function removeTrack(i) {
 function renderPlaylist() {
   const pl = document.getElementById('playlist');
   if (!pl) return;
+  const visible = getVisibleTracks();
   document.getElementById('empty-state').style.display = state.tracks.length ? 'none' : '';
   [...pl.querySelectorAll('.track-item')].forEach(el => el.remove());
-  state.tracks.forEach((t, i) => {
+  visible.forEach((t) => {
+    const i = state.tracks.indexOf(t); // real index in state.tracks for playback
     const div = document.createElement('div');
     div.className = 'track-item' + (i === state.currentIndex ? ' active' : '') + (t.type === 'spotify' ? ' spotify-track' : '');
     const badges = [
@@ -724,6 +762,22 @@ function renderPlaylist() {
         : (t.audioStoragePath ? '<span class="track-badge synced">☁ SYNCED</span>' : ''),
       t.videoStoragePath ? '<span class="track-badge video">🎬 VIDEO</span>' : '',
     ].join('');
+
+    // Build folder assign dropdown options
+    const folderOpts = folders.length
+      ? '<div class="folder-assign-menu" id="fam_' + i + '" style="display:none;position:absolute;right:0;top:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:4px;z-index:50;min-width:130px;">' +
+        folders.map(f =>
+          '<div onclick="event.stopPropagation();toggleTrackInFolder('' + t.id + '','' + f.id + '');document.getElementById('fam_' + i + '').style.display='none'" ' +
+          'style="padding:5px 8px;font-size:11px;cursor:pointer;border-radius:5px;display:flex;align-items:center;gap:6px;transition:background .1s" ' +
+          'onmouseover="this.style.background='var(--surface3)'" onmouseout="this.style.background=''">' +
+          '<span style="color:' + f.color + '">📁</span>' + esc(f.name) +
+          (f.trackIds.includes(t.id) ? ' <span style="color:var(--accent);margin-left:auto">✓</span>' : '') +
+          '</div>'
+        ).join('') +
+        '</div>'
+      : '';
+
+    div.style.position = 'relative';
     div.innerHTML =
       '<div class="track-thumb">' +
         (t.art ? '<img src="' + t.art + '">' : '<div class="track-thumb-inner">' + (t.type === 'spotify' ? '🟢' : t.type === 'youtube' ? '▶' : '🎵') + '</div>') +
@@ -733,13 +787,34 @@ function renderPlaylist() {
         '<div class="track-artist">' + esc(t.artist) + '</div>' +
         '<div class="track-badges">' + badges + '</div>' +
       '</div>' +
-      '<div class="track-actions">' +
+      '<div class="track-actions" style="position:relative">' +
+        (folders.length ? '<button class="track-action-btn" onclick="event.stopPropagation();toggleFolderMenu(' + i + ')" title="Add to folder">📁' + folderOpts + '</button>' : '') +
         (t.type === 'local' ? '<button class="track-action-btn' + (t.videoStoragePath ? ' has-video' : '') + '" onclick="event.stopPropagation();openVideoModalForTrack(' + i + ')" title="' + (t.videoStoragePath ? 'Change' : 'Add') + ' video">🎬</button>' : '') +
         '<button class="track-action-btn" onclick="event.stopPropagation();removeTrack(' + i + ')" title="Remove">✕</button>' +
       '</div>';
     div.addEventListener('click', () => playTrack(i));
     pl.appendChild(div);
   });
+}
+
+function toggleFolderMenu(trackIndex) {
+  const id = 'fam_' + trackIndex;
+  const menu = document.getElementById(id);
+  if (!menu) return;
+  const isOpen = menu.style.display !== 'none';
+  // Close all open menus first
+  document.querySelectorAll('[id^="fam_"]').forEach(m => m.style.display = 'none');
+  if (!isOpen) menu.style.display = 'block';
+}
+document.addEventListener('click', () => {
+  document.querySelectorAll('[id^="fam_"]').forEach(m => m.style.display = 'none');
+});
+
+function toggleTrackInFolder(trackId, folderId) {
+  const folder = folders.find(f => f.id === folderId);
+  if (!folder) return;
+  if (folder.trackIds.includes(trackId)) removeTrackFromFolder(trackId, folderId);
+  else addTrackToFolder(trackId, folderId);
 }
 
 function esc(s) {
@@ -1407,11 +1482,188 @@ function toast(msg, type) {
 }
 
 // ═══════════════════════════════════════════════════
+// SIDEBAR RESIZE
+// ═══════════════════════════════════════════════════
+function initSidebarResize() {
+  const sidebar  = document.getElementById('sidebar');
+  const resizer  = document.getElementById('sidebar-resizer');
+  let dragging = false, startX = 0, startW = 0;
+
+  resizer.addEventListener('mousedown', e => {
+    if (sidebar.classList.contains('collapsed')) return;
+    dragging = true; startX = e.clientX; startW = sidebar.offsetWidth;
+    resizer.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const w = Math.max(160, Math.min(520, startW + e.clientX - startX));
+    sidebar.style.width = w + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false; resizer.classList.remove('dragging');
+    document.body.style.cursor = ''; document.body.style.userSelect = '';
+    localStorage.setItem('wavr_sidebar_w', sidebar.style.width);
+  });
+
+  // Restore saved width
+  const saved = localStorage.getItem('wavr_sidebar_w');
+  if (saved) sidebar.style.width = saved;
+}
+
+function collapseSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const expandBtn = document.getElementById('sidebar-expand-btn');
+  const collapsed = sidebar.classList.toggle('collapsed');
+  expandBtn.style.display = collapsed ? 'block' : 'none';
+  localStorage.setItem('wavr_sidebar_collapsed', collapsed ? '1' : '0');
+}
+
+function restoreSidebarState() {
+  if (localStorage.getItem('wavr_sidebar_collapsed') === '1') {
+    document.getElementById('sidebar').classList.add('collapsed');
+    document.getElementById('sidebar-expand-btn').style.display = 'block';
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// FOLDERS
+// ═══════════════════════════════════════════════════
+// folders: [{ id, name, color, trackIds[] }]
+let folders = [];
+let activeFolderId = null; // null = show all tracks
+
+function saveFolders() {
+  if (!sb || !currentUser) return;
+  sb.from('wavr_settings').upsert({
+    user_id: currentUser.id,
+    folders_json: JSON.stringify(folders),
+    updated_at: new Date().toISOString(),
+  }).catch(e => console.warn('saveFolders error:', e));
+}
+
+async function loadFolders() {
+  if (!sb || !currentUser) return;
+  const { data } = await sb.from('wavr_settings').select('folders_json').eq('user_id', currentUser.id).single();
+  if (data?.folders_json) {
+    try { folders = JSON.parse(data.folders_json) || []; } catch(e) { folders = []; }
+  }
+  renderFolders();
+}
+
+function createFolder() {
+  const name = prompt('Folder name:');
+  if (!name || !name.trim()) return;
+  const colors = ['#7cfc8a','#c87bff','#ffaa44','#ff5566','#44aaff','#ff44aa'];
+  folders.push({
+    id: 'f_' + Date.now(),
+    name: name.trim(),
+    color: colors[folders.length % colors.length],
+    open: true,
+    trackIds: [],
+  });
+  saveFolders();
+  renderFolders();
+}
+
+function renameFolder(folderId) {
+  const folder = folders.find(f => f.id === folderId);
+  if (!folder) return;
+  const name = prompt('New name:', folder.name);
+  if (!name || !name.trim()) return;
+  folder.name = name.trim();
+  saveFolders(); renderFolders();
+}
+
+function deleteFolder(folderId) {
+  if (!confirm('Delete folder? Tracks inside won't be deleted.')) return;
+  folders = folders.filter(f => f.id !== folderId);
+  if (activeFolderId === folderId) activeFolderId = null;
+  saveFolders(); renderFolders(); renderPlaylist();
+}
+
+function toggleFolderOpen(folderId) {
+  const folder = folders.find(f => f.id === folderId);
+  if (folder) { folder.open = !folder.open; renderFolders(); }
+}
+
+function setActiveFolder(folderId) {
+  activeFolderId = activeFolderId === folderId ? null : folderId;
+  renderFolders(); renderPlaylist();
+}
+
+function addTrackToFolder(trackId, folderId) {
+  const folder = folders.find(f => f.id === folderId);
+  if (!folder) return;
+  if (!folder.trackIds.includes(trackId)) folder.trackIds.push(trackId);
+  saveFolders(); renderFolders(); renderPlaylist();
+}
+
+function removeTrackFromFolder(trackId, folderId) {
+  const folder = folders.find(f => f.id === folderId);
+  if (!folder) return;
+  folder.trackIds = folder.trackIds.filter(id => id !== trackId);
+  saveFolders(); renderFolders(); renderPlaylist();
+}
+
+function getVisibleTracks() {
+  if (!activeFolderId) return state.tracks;
+  const folder = folders.find(f => f.id === activeFolderId);
+  if (!folder) return state.tracks;
+  return state.tracks.filter(t => folder.trackIds.includes(t.id));
+}
+
+function renderFolders() {
+  const library = document.getElementById('library');
+  if (!library) return;
+  // Remove old folder rows
+  [...library.querySelectorAll('.folder-row, .folder-tracks')].forEach(el => el.remove());
+
+  // "All Tracks" row
+  const allRow = document.createElement('div');
+  allRow.className = 'folder-row' + (!activeFolderId ? ' active' : '');
+  allRow.style.borderLeft = '3px solid ' + (!activeFolderId ? 'var(--accent)' : 'transparent');
+  allRow.style.transition = 'border-color .15s';
+  allRow.innerHTML =
+    '<span class="folder-icon">🎵</span>' +
+    '<span class="folder-label" style="color:' + (!activeFolderId ? 'var(--text)' : '') + '">All Tracks</span>' +
+    '<span class="folder-count">' + state.tracks.length + '</span>';
+  allRow.addEventListener('click', () => setActiveFolder(null));
+  library.insertBefore(allRow, document.getElementById('playlist'));
+
+  // Folder rows
+  folders.forEach(folder => {
+    const isActive = activeFolderId === folder.id;
+    const row = document.createElement('div');
+    row.className = 'folder-row';
+    row.style.borderLeft = '3px solid ' + (isActive ? folder.color : 'transparent');
+    row.style.transition = 'border-color .15s';
+    row.innerHTML =
+      '<span class="folder-caret' + (folder.open ? ' open' : '') + '">▶</span>' +
+      '<span class="folder-icon" style="color:' + folder.color + '">📁</span>' +
+      '<span class="folder-label" style="color:' + (isActive ? 'var(--text)' : '') + '">' + esc(folder.name) + '</span>' +
+      '<span class="folder-count">' + folder.trackIds.length + '</span>' +
+      '<div class="folder-actions">' +
+        '<button class="folder-act-btn" onclick="event.stopPropagation();setActiveFolder('' + folder.id + '')" title="Filter">◎</button>' +
+        '<button class="folder-act-btn" onclick="event.stopPropagation();renameFolder('' + folder.id + '')" title="Rename">✎</button>' +
+        '<button class="folder-act-btn" onclick="event.stopPropagation();deleteFolder('' + folder.id + '')" title="Delete" style="color:var(--danger)">✕</button>' +
+      '</div>';
+    row.querySelector('.folder-caret').addEventListener('click', e => { e.stopPropagation(); toggleFolderOpen(folder.id); });
+    row.querySelector('.folder-label').addEventListener('click', () => setActiveFolder(folder.id));
+    library.insertBefore(row, document.getElementById('playlist'));
+  });
+}
+
+// ═══════════════════════════════════════════════════
 // BOOT — runs after DOM is fully ready
 // ═══════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', async () => {
   // Grab DOM refs
   audioEl  = document.getElementById('audio-el');
+  initSidebarResize();
+  restoreSidebarState();
   videoEl  = document.getElementById('video-player');
   canvasEl = document.getElementById('canvas-viz');
   ctx2d    = canvasEl.getContext('2d');
