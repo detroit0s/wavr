@@ -172,7 +172,19 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
 .sync-icon{font-size:11px;}
 
 /* PLAYER BAR */
-#player-bar{background:var(--surface);border-top:1px solid var(--border);padding:14px 22px;}
+#player-bar{background:var(--surface);border-top:1px solid var(--border);padding:14px 22px;position:relative;}
+
+/* Queue drawer */
+#queue-drawer{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);border-radius:20px 20px 0 0;z-index:60;transform:translateY(100%);transition:transform .35s cubic-bezier(.32,.72,0,1);max-height:72vh;display:flex;flex-direction:column;box-shadow:0 -8px 40px rgba(0,0,0,.5);}
+#queue-drawer.open{transform:translateY(0);}
+#queue-drawer-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:12px auto 4px;flex-shrink:0;cursor:pointer;}
+#queue-drawer-title{font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--muted);font-family:"Space Mono",monospace;text-align:center;padding:0 0 10px;flex-shrink:0;}
+#queue-drawer-list{overflow-y:auto;flex:1;padding:0 0 env(safe-area-inset-bottom,16px);}
+#queue-drawer-list::-webkit-scrollbar{width:3px;}
+#queue-drawer-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+#queue-drawer-overlay{display:none;position:fixed;inset:0;z-index:59;background:rgba(0,0,0,.4);}
+#queue-btn{position:relative;}
+#queue-btn .q-count{position:absolute;top:-4px;right:-4px;background:var(--accent);color:#000;border-radius:50%;width:14px;height:14px;font-size:8px;font-weight:700;display:flex;align-items:center;justify-content:center;font-family:"Space Mono",monospace;}
 .progress-wrap{display:flex;align-items:center;gap:9px;margin-bottom:12px;}
 .time-label{font-size:10px;font-family:'Space Mono',monospace;color:var(--muted);min-width:34px;}
 .time-label.right{text-align:right;}
@@ -235,12 +247,14 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
 
 /* Mobile responsive */
 @media(max-width:680px){
-  #sidebar{position:fixed;left:-270px;top:0;bottom:0;z-index:40;transition:left .3s;}
-  #sidebar.mobile-open{left:0;}
-  #mobile-menu-btn{display:flex;}
+  #sidebar{position:fixed;left:0;top:0;bottom:0;z-index:40;transform:translateX(-110%);transition:transform .3s;width:285px!important;min-width:285px!important;box-shadow:4px 0 24px rgba(0,0,0,.6);}
+  #sidebar.mobile-open{transform:translateX(0);}
+  #sidebar-resizer{display:none;}
+  #mobile-menu-btn{display:flex!important;}
   #main{width:100%;}
 }
-#mobile-menu-btn{display:none;position:absolute;top:14px;left:14px;z-index:50;background:rgba(0,0,0,.6);border:1px solid var(--border);color:var(--text);border-radius:8px;width:34px;height:34px;align-items:center;justify-content:center;cursor:pointer;font-size:16px;}
+#mobile-overlay{display:none;position:fixed;inset:0;z-index:39;background:rgba(0,0,0,.5);}
+#mobile-menu-btn{display:none;position:fixed;top:14px;left:14px;z-index:50;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:10px;width:40px;height:40px;align-items:center;justify-content:center;cursor:pointer;font-size:18px;box-shadow:0 2px 12px rgba(0,0,0,.4);}
 </style>
 </head>
 <body>
@@ -337,9 +351,10 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
     </div>
   </div>
 
+  <div id="mobile-overlay" onclick="document.getElementById('sidebar').classList.remove('mobile-open');this.style.display='none'"></div>
   <!-- MAIN AREA -->
   <div id="main">
-    <button id="mobile-menu-btn" onclick="document.getElementById('sidebar').classList.toggle('mobile-open')">☰</button>
+    <button id="mobile-menu-btn" onclick="const s=document.getElementById('sidebar');s.classList.toggle('mobile-open');document.getElementById('mobile-overlay').style.display=s.classList.contains('mobile-open')?'block':'none'">☰</button>
 
     <div id="viz-area">
       <div id="bg-art"></div>
@@ -380,6 +395,7 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
           <button id="play-btn" onclick="togglePlay()">▶</button>
           <button class="ctrl-btn" onclick="nextTrack()" title="Next">⏭</button>
           <button class="ctrl-btn" id="repeat-btn" onclick="toggleRepeat()" title="Repeat">↻</button>
+          <button class="ctrl-btn" id="queue-btn" onclick="toggleQueueDrawer()" title="Queue">≡<span class="q-count" id="q-count">0</span></button>
         </div>
         <div class="ctrl-right">
           <button class="ctrl-btn" onclick="showVideoModal()" title="Attach video to track" id="add-video-btn">🎬</button>
@@ -387,6 +403,14 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
       </div>
     </div>
   </div>
+</div>
+
+<!-- QUEUE DRAWER -->
+<div id="queue-drawer-overlay" onclick="closeQueueDrawer()"></div>
+<div id="queue-drawer">
+  <div id="queue-drawer-handle" onclick="closeQueueDrawer()"></div>
+  <div id="queue-drawer-title">Queue</div>
+  <div id="queue-drawer-list"></div>
 </div>
 
 <!-- VIDEO MODAL -->
@@ -705,7 +729,7 @@ async function handleFiles(files) {
     const tmp = new Audio(track._blobUrl);
     tmp.addEventListener('loadedmetadata', () => { track.duration = tmp.duration; renderPlaylist(); });
   });
-  renderPlaylist();
+  renderPlaylist(); updateQueueCount();
   toast(fileArray.length + ' track(s) added — uploading...', 'info');
   if (state.currentIndex === -1) playTrack(firstIdx);
 
@@ -1512,6 +1536,70 @@ function toast(msg, type) {
 }
 
 // ═══════════════════════════════════════════════════
+// QUEUE DRAWER
+// ═══════════════════════════════════════════════════
+function toggleQueueDrawer() {
+  const drawer = document.getElementById('queue-drawer');
+  if (drawer.classList.contains('open')) closeQueueDrawer();
+  else openQueueDrawer();
+}
+
+function openQueueDrawer() {
+  renderQueueDrawer();
+  document.getElementById('queue-drawer').classList.add('open');
+  document.getElementById('queue-drawer-overlay').style.display = 'block';
+}
+
+function closeQueueDrawer() {
+  document.getElementById('queue-drawer').classList.remove('open');
+  document.getElementById('queue-drawer-overlay').style.display = 'none';
+}
+
+function renderQueueDrawer() {
+  const list = document.getElementById('queue-drawer-list');
+  list.innerHTML = '';
+  const visible = getVisibleTracks();
+  visible.forEach(t => {
+    const i = state.tracks.indexOf(t);
+    const isActive = i === state.currentIndex;
+    const row = document.createElement('div');
+    row.className = 'track-item' + (isActive ? ' active' : '');
+    row.style.cssText = 'padding:10px 18px;border-left:3px solid ' + (isActive ? 'var(--accent)' : 'transparent') + ';';
+
+    const thumb = document.createElement('div');
+    thumb.className = 'track-thumb';
+    if (t.art) {
+      const img = document.createElement('img'); img.src = t.art; thumb.appendChild(img);
+    } else {
+      const inner = document.createElement('div'); inner.className = 'track-thumb-inner';
+      inner.textContent = t.type === 'spotify' ? '🟢' : t.type === 'youtube' ? '▶' : '🎵';
+      thumb.appendChild(inner);
+    }
+
+    const info = document.createElement('div'); info.className = 'track-info';
+    const title = document.createElement('div'); title.className = 'track-title'; title.textContent = t.title;
+    const artist = document.createElement('div'); artist.className = 'track-artist'; artist.textContent = t.artist || '—';
+    if (isActive) { title.style.color = 'var(--accent)'; }
+    info.append(title, artist);
+    row.append(thumb, info);
+    row.addEventListener('click', () => { playTrack(i); closeQueueDrawer(); });
+    list.appendChild(row);
+  });
+
+  // Scroll active track into view
+  const active = list.querySelector('.track-item.active');
+  if (active) setTimeout(() => active.scrollIntoView({ block: 'center', behavior: 'smooth' }), 50);
+
+  // Update count badge
+  document.getElementById('q-count').textContent = visible.length;
+}
+
+function updateQueueCount() {
+  const el = document.getElementById('q-count');
+  if (el) el.textContent = getVisibleTracks().length;
+}
+
+// ═══════════════════════════════════════════════════
 // SIDEBAR RESIZE
 // ═══════════════════════════════════════════════════
 function initSidebarResize() {
@@ -1613,7 +1701,7 @@ function toggleFolderOpen(folderId) {
 
 function setActiveFolder(folderId) {
   activeFolderId = activeFolderId === folderId ? null : folderId;
-  renderFolders(); renderPlaylist();
+  renderFolders(); renderPlaylist(); updateQueueCount();
 }
 
 function addTrackToFolder(trackId, folderId) {
@@ -1810,6 +1898,7 @@ const _globals = {
   openVideoModalForTrack, closeVideoModal, confirmVideoAttach, searchSpotify,
   createFolder, setActiveFolder, renameFolder, deleteFolder, toggleFolderOpen,
   toggleTrackInFolder, toggleFolderMenu, toggleVideo, playTrack,
+  toggleQueueDrawer, closeQueueDrawer,
 };
 Object.assign(window, _globals);
 </script>
